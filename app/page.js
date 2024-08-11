@@ -1,113 +1,316 @@
+"use client";
 import Image from "next/image";
+import {db} from "@/firebase";
+import { useState, useEffect, Fragment } from "react";
+import { collection, getDocs, deleteDoc, setDoc, doc} from "firebase/firestore/lite";
+import Card from '@mui/material/Card';
+import CardActions from '@mui/material/CardActions';
+import CardContent from '@mui/material/CardContent';
+import CardMedia from '@mui/material/CardMedia';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import { Box, Container, Grid, Input } from "@mui/material";
+import Grid2 from "@mui/material/Unstable_Grid2/Grid2";
+import TextField from '@mui/material/TextField';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import '@fontsource/roboto/300.css';
+import '@fontsource/roboto/400.css';
+import '@fontsource/roboto/500.css';
+import '@fontsource/roboto/700.css';
+
+
+
+function Pantry({itemObj,updateData}){
+  const [isEditable,setEditable] = useState(false);
+
+  async function deletePantry(){
+    try{
+      await deleteDoc(doc(db,"inventory",itemObj.id)).then(updateData()).catch(alert("There is a problem deleting the item!"));
+    }
+    catch(error){
+      alert("There is an error deleting the pantry. Try again later!");
+    }
+    
+  }
+
+  async function updatePantry(event){
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const jsonResult = Object.fromEntries(formData.entries());
+    if(jsonResult.quantity<0){
+      jsonResult.quantity = 0;
+    }
+    try{
+      if(jsonResult.id===itemObj.id){
+        await setDoc(doc(db,"inventory",itemObj.id),{image:jsonResult.image,quantity:jsonResult.quantity});
+      }
+      else{
+        await setDoc(doc(db,"inventory",jsonResult.id),{image:jsonResult.image,quantity:jsonResult.quantity}).then(deleteDoc(doc(db,"inventory",itemObj.id)));
+      }
+      
+    }
+    catch(error){
+      alert("There is an error updating the pantry. Try again later!");
+    }
+    setEditable(false);
+    updateData();
+    
+  }
+
+  function editPantry(){
+    setEditable(!isEditable);
+  }
+
+
+  return(
+  <>
+    <Card sx={{ width:"15em", margin:"1em"}}>
+      <div className="imageContainer">
+      <CardMedia
+        component="img"
+        alt={itemObj.id}
+        image={itemObj.image}
+        className="contain"
+      />
+      </div>
+      
+        {isEditable? <>
+          <CardContent>
+          <form id="update-form" onSubmit={updatePantry}>
+            <TextField
+              autoFocus
+              required
+              margin="dense"
+              id="name"
+              defaultValue={itemObj.id}
+              name="id"
+              type="text"
+              fullWidth
+              variant="standard"
+            />
+            <TextField
+              autoFocus
+              required
+              margin="dense"
+              id="quantity"
+              defaultValue={itemObj.quantity}
+              name="quantity"
+              type="number"
+              fullWidth
+              variant="standard"
+            />
+            <TextField
+              autoFocus
+              required
+              margin="dense"
+              id="imageUrl"
+              defaultValue={itemObj.image}
+              name="image"
+              type="text"
+              fullWidth
+              variant="standard"
+            />
+          </form>
+          </CardContent>
+        </>:
+        <>
+          <CardContent>
+            <Typography gutterBottom variant="h5" component="div">{itemObj.id}</Typography>
+            <Typography variant="body2" color="text.secondary">Quantity: {itemObj.quantity}</Typography>
+          </CardContent>
+        </>}
+        
+      
+      <CardActions>
+        <Button size="small" variant="contained" onClick={editPantry}>{isEditable?"Cancel":"Edit"}</Button>
+        {isEditable?<Button size="small" variant="contained" form="update-form" type="submit">Update</Button>:<Button size="small" variant="contained" onClick={deletePantry}>Delete</Button>}
+      </CardActions>
+    </Card>
+  </>
+  );
+}
+
+function AddDataDialog({data, addFunction}){
+  const [open, setOpen] = useState(false);
+
+  const handleClickOpen = () => {
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  return (
+    <Fragment>
+      <Button variant="contained" onClick={handleClickOpen}>
+        Add Pantry
+      </Button>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        PaperProps={{
+          component: 'form',
+          onSubmit: async (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const formJson = Object.fromEntries(formData.entries());
+            const itemExists = ()=>{
+              data.forEach((item)=>{if(itemObj.id==item.id){
+                return true;
+              }});
+              return false;
+            }
+            if(!itemExists){
+              try{
+                await setDoc(doc(db,"inventory",formJson.id),{quantity:formJson.quantity, image:formJson.image}).then(addFunction());
+              }
+              catch(error){
+                alert("There is an error attempting your request! Please try again later!");
+              }
+              
+            }
+            else{
+              alert("The item exists already!!");
+            }
+            
+            handleClose();
+          },
+        }}
+      >
+        <DialogTitle>Add Item</DialogTitle>
+        <DialogContent>
+        <TextField
+            autoFocus
+            required
+            margin="dense"
+            id="name"
+            name="id"
+            label="Item Name"
+            type="text"
+            fullWidth
+            variant="standard"
+          />
+          <TextField
+            autoFocus
+            required
+            margin="dense"
+            id="quantity"
+            name="quantity"
+            label="Quantity"
+            type="number"
+            fullWidth
+            variant="standard"
+          />
+          <TextField
+            autoFocus
+            required
+            margin="dense"
+            id="imageUrl"
+            name="image"
+            label="Image URL"
+            type="text"
+            fullWidth
+            variant="standard"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} variant="contained" sx={{backgroundColor:"#b71c1c",":hover":{backgroundColor:"#d32f2f"}}}>Cancel</Button>
+          <Button type="submit" variant="contained">Create</Button>
+        </DialogActions>
+      </Dialog>
+    </Fragment>
+  );
+}
+
+function Board(){
+  const [data, setData] = useState([]);
+  const [searchResult, setSearchResult] = useState([]);
+
+  function searchPantry(event){
+    setSearchResult(data.filter((item)=>
+      (item.id).includes((event.target.value).toLowerCase())
+    ));
+  }
+
+  
+
+  async function fetchData(){
+    const result = await getDocs(collection(db,"inventory"))
+    .then((querySnapshot)=>{
+      const newData = querySnapshot.docs.map((doc)=>(
+        {...doc.data(),id:doc.id}
+      ));
+      console.log(process.env);
+      setData(newData);
+      setSearchResult(newData);
+    });
+  }
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  return (
+    <div>
+      <Box display="flex" alignItems="center" padding="0.2em" justifyContent="center" gap="1em" marginTop="0.5em">
+      <AddDataDialog data={data} addFunction={fetchData}/>
+      <TextField sx={{
+          backgroundColor: 'white', // Sets the inner background color to white
+          '& .MuiInputBase-input::placeholder': {
+            fontWeight: 'bold', // Makes the placeholder text bold
+          },
+          '& fieldset': {
+              borderColor: 'black !important', // Default border color is black
+            },
+            '&:hover fieldset': {
+              borderColor: 'black !important', // Border color on hover is black
+            },
+            '&.Mui-focused fieldset': {
+              borderColor: 'black !important', // Border color when focused is black
+            }
+        }}
+        InputLabelProps={{
+          style: { color: 'black' }, // Ensures the label color is black
+        }}
+        InputProps={{
+          style: {
+            backgroundColor: 'white', // Ensures the input area remains white
+          },
+        }}
+            
+            id="search"
+            name="search"
+            placeholder="Search the inventory"
+            type="text"
+            variant="outlined"
+            onChange={searchPantry}
+          />
+      </Box>
+      
+      
+      <Grid2 container>
+        {searchResult.map((itemObj,index)=>(
+          <Grid item xs={12} ms={4} key={index}>
+            <Pantry key={index} itemObj={itemObj} updateData={fetchData}/>
+          </Grid>
+        ))}
+      </Grid2>
+    </div>
+  );
+
+  // <Pantry/>
+}
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+    <>
+    <Typography color="black" variant="h2" textAlign="center">Inventory Management System</Typography>
+    <Board/>
+    </>
+    
   );
 }
