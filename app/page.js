@@ -28,7 +28,7 @@ function Pantry({itemObj,updateData}){
 
   async function deletePantry(){
     try{
-      await deleteDoc(doc(db,"inventory",itemObj.id)).then(updateData()).catch(alert("There is a problem deleting the item!"));
+      await deleteDoc(doc(db,"inventory",itemObj.id)).then(updateData());
     }
     catch(error){
       alert("There is an error deleting the pantry. Try again later!");
@@ -159,12 +159,13 @@ function AddDataDialog({data, addFunction}){
             const formData = new FormData(event.currentTarget);
             const formJson = Object.fromEntries(formData.entries());
             const itemExists = ()=>{
-              data.forEach((item)=>{if(itemObj.id==item.id){
+              data.forEach((item)=>{if(formJson.id==item.id){
                 return true;
               }});
               return false;
             }
-            if(!itemExists){
+            console.log(itemExists());
+            if(!itemExists()){
               try{
                 await setDoc(doc(db,"inventory",formJson.id),{quantity:formJson.quantity, image:formJson.image}).then(addFunction());
               }
@@ -173,9 +174,9 @@ function AddDataDialog({data, addFunction}){
               }
               
             }
-            else{
-              alert("The item exists already!!");
-            }
+            // else{
+            //   alert("The item exists already!!");
+            // }
             
             handleClose();
           },
@@ -244,7 +245,6 @@ function Board(){
       const newData = querySnapshot.docs.map((doc)=>(
         {...doc.data(),id:doc.id}
       ));
-      console.log(process.env);
       setData(newData);
       setSearchResult(newData);
     });
